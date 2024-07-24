@@ -33,8 +33,8 @@ const redirect_uri = process.env.REDIRECT_URL;
 
 // validate the tokens
 async function validateToken(c:any) {
-  const { refreshToken } = c.req.cookie();
-  let { authorization: accessToken, username } = c.req.header();
+  const { refreshToken } = await getCookie(c);
+  let { authorization: accessToken, username } = await c.req.header();
   if (!accessToken || !refreshToken || !username) {
     return c.status(401).json({ message: 'Unauthorized: Missing credentials' });
   }
@@ -49,11 +49,13 @@ async function validateToken(c:any) {
       await c.next();
     } else {
       console.log(TokenInfo.email === username, TokenInfo.email_verified);
-      return c.status(401).json({ message: 'Unauthorized' });
+      c.status(401);
+      return c.json({ message: 'Unauthorized' });
     }
   } catch (error) {
     console.error('Error validating token:', error);
-    return c.status(500).json({ message: 'Internal Server Error' });
+    c.status(500);
+    return  c.json({ message: 'Internal Server Error' });
   }
 }
 
@@ -122,8 +124,8 @@ const showEvent = async (MaxDays:number, auth:any) => {
 }
 
 calAPirouter.get('/FutureEvents', validateToken, async (c) => {
-  const { refreshToken } = getCookie(c);
-  let { authorization: accessToken } = c.req.header();
+  const { refreshToken } = await getCookie(c);
+  let { authorization: accessToken } = await c.req.header();
   accessToken = accessToken.split(' ')[1];
 
   const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
@@ -133,6 +135,7 @@ calAPirouter.get('/FutureEvents', validateToken, async (c) => {
   try {
     const future_events = await showEvent(2, oAuth2Client);
     console.log("It is done!!!");
+    c.status(200);
     return c.json(future_events);
   } catch (error) {
     console.error('Error fetching future events:', error);
@@ -142,18 +145,18 @@ calAPirouter.get('/FutureEvents', validateToken, async (c) => {
 });
 
 calAPirouter.get('/auth/check', async (c) => {
-  const { refreshToken } = getCookie(c);
+  const { refreshToken } = await getCookie(c);
   if (!refreshToken) {
     return c.json({
       LoginIn: false,
       refreshToken: false
     });
   }
-  console.log(refreshToken);
   try {
     const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
     oAuth2Client.setCredentials({ refresh_token: refreshToken });
     const accessToken = await oAuth2Client.getAccessToken();
+    c.status(200);
     return c.json({ LoginIn: true, accessToken: accessToken.token });
   } catch (error) {
     console.log('Error in check:', error);
@@ -167,8 +170,8 @@ calAPirouter.get('/auth/check', async (c) => {
 });
 
 calAPirouter.get('/oauth2callback', async (c) => {
-  const { refreshToken } = getCookie(c);
-  const { authorization: Authorization } = c.req.header();
+  const { refreshToken } = await getCookie(c);
+  const { authorization: Authorization } = await c.req.header();
   const code = Authorization.split(' ')[1];
   const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
 
@@ -181,6 +184,7 @@ calAPirouter.get('/oauth2callback', async (c) => {
     }
     await oAuth2Client.setCredentials({ refresh_token: refreshToken });
     const accessTokenGet = await oAuth2Client.getAccessToken();
+    c.status(200);
     return c.json({ accessToken: accessTokenGet.token });
   } catch (error) {
     console.error('Error getting accessToken:', error);
@@ -190,8 +194,8 @@ calAPirouter.get('/oauth2callback', async (c) => {
 });
 
 calAPirouter.get('/userinfo', async (c) => {
-  const { refreshToken } = getCookie(c);
-  const { authorization: Authorization } = c.req.header();
+  const { refreshToken } = await getCookie(c);
+  const { authorization: Authorization } = await c.req.header();
   const code = Authorization.split(' ')[1];
   try {
     const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
@@ -199,6 +203,7 @@ calAPirouter.get('/userinfo', async (c) => {
 
     const oauth2 = google.oauth2({ version: 'v2', auth: oAuth2Client });
     const userInfo = await oauth2.userinfo.get();
+    c.status(500);
     return c.json(userInfo.data);
   } catch (error) {
     console.error('Error getting user info:', error);
@@ -208,10 +213,17 @@ calAPirouter.get('/userinfo', async (c) => {
 });
 
 calAPirouter.get('/logout', async (c) => {
-    deleteCookie(c,"refreshToken");
+  try {
+    await deleteCookie(c,"refreshToken");
+    c.status(200);
     return c.json({
         message: "You have logged out successfully"
     });
+  } catch (error) {
+    console.error('Error logging out:', error);
+    c.status(500);
+    return c.json({ message: 'Error logging out' });
+  }
 });
 
 export default calAPirouter;

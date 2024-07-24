@@ -1,7 +1,7 @@
 name = "backendfolder"
 compatibility_date = "2024-07-23"
 
-# [vars]
+[vars]
 DATABASE_URL="prisma://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiMWM0MTAyM2QtMTgzNy00YTRlLTgwYjktNTFlZDJjMDFhODQ1IiwidGVuYW50X2lkIjoiZmY2ZTVjMGRjM2Q3MjlhZmE5MjNlZDU1YWY1MjU3MjI1OThhN2FiNzZhZjQ5MWM2YzIwNzc4ODI4N2ExNzBiNiIsImludGVybmFsX3NlY3JldCI6ImRiYWZmZmJkLWQ1MzMtNDNiYy1iYWFkLWIyZGQzMDlkY2NjZCJ9.kYgfUHRsYFI5XrrvPnlI5t015kZh2Da4T-PGgNjTC4k"
 CLIENT_ID = '1093839051041-87aul8h96j6d533a6v6mp092q04ajap6.apps.googleusercontent.com'
 CLIENT_SECRET = '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'
