@@ -3,7 +3,6 @@ import { PrismaClient } from '@prisma/client/edge';
 import { withAccelerate } from '@prisma/extension-accelerate';
 import { google } from 'googleapis';
 const cors = require('cors');
-const cookieParser = require('cookie-parser');
 import {
     getCookie,
     getSignedCookie,
@@ -21,7 +20,6 @@ const calAPirouter = new Hono<{
   }
 }>();
 
-calAPirouter.use(cookieParser());
 calAPirouter.use(cors({
   origin: 'http://localhost:5173',
   credentials: true,
@@ -226,4 +224,5 @@ calAPirouter.get('/logout', async (c) => {
   }
 });
 
-export default calAPirouter;
+// export default calAPirouter;
+module.exports = {calAPirouter , createCalendarEvent,color_id , getDate, showEvent, validateToken};
