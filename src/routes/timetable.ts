@@ -1,13 +1,19 @@
 import { Hono } from 'hono';
 import { PrismaClient } from '@prisma/client/edge';
 import { withAccelerate } from '@prisma/extension-accelerate';
-const cors = require('cors');
+// const {updateRoutes} = require('./updateRoutes');
+import { updateRoutes } from './updateRoutes';
+import { deleteRoutes } from './DeleteRoutes';
+// const {deleteRoutes} = require('./DeleteRoutes');
+
+import { cors } from 'hono/cors';
 import {
     getCookie,
 } from 'hono/cookie'
+import { some } from 'hono/combine';
 
 
-const timetablerouter = new Hono<{
+export const timetablerouter = new Hono<{
     Bindings: {
       DATABASE_URL: string,
       CLIENT_ID: string,
@@ -20,6 +26,13 @@ timetablerouter.use(cors({
     origin: 'http://localhost:5173',
     credentials: true,
 }));
+
+timetablerouter.get('/',async (c)=>{
+  console.log("ji");
+  return c.json({
+    message:"Hi there!!!"
+  })
+})
 
 timetablerouter.post('/create', async (c) => {
     const { assignedBy, inputData, day } = await c.req.json();
@@ -43,7 +56,8 @@ timetablerouter.post('/create', async (c) => {
           userDetails: { email: assignedBy }
         }
       });
-  
+
+      console.log(courseExists);
       if (courseExists) {
         c.status(200)
         return c.json({ message: "Course already exists", exists: true });
@@ -58,15 +72,15 @@ timetablerouter.post('/create', async (c) => {
           absent: inputData.absent || 0,
           cancelled: inputData.cancelled || 0,
           criteria: inputData.criteria || "75%",
-          userDetails: { connect: { email: assignedBy } },
+          userDetails: { connectOrCreate:{ where: { email: assignedBy }, create: { email: assignedBy } } },
           thatday: { create: datacreated }
         }
       });
       return c.json({ message: createdData });
     } catch (error) {
       console.error(error);
-    c.status(500)
-    return c.json({ error, message: "An error occurred while creating the course." });
+      c.status(500)
+      return c.json({ error, message: "An error occurred while creating the course." });
     }
 });
 
@@ -95,7 +109,7 @@ timetablerouter.get('/getallcoursesAtthatday', async (c) => {
 
 // Route to get all courses of the user.
 timetablerouter.get('/getallcourses', async (c) => {
-    const { assignedBy } = getCookie(c);
+    const { assignedBy } = c.req.query();
     const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
   
     try {
@@ -116,9 +130,10 @@ timetablerouter.get('/getallcourses', async (c) => {
 
 // Route to get the courses with their days.
 timetablerouter.post('/AlldataforTimeTable', async (c) => {
-    const { assignedBy } = getCookie(c);
+    const { assignedBy } = c.req.query();
     const { courseNames } = await c.req.json();
     const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
+    console.log(courseNames);
   
     try {
         const daysPromise = courseNames.map((course: any) => 
@@ -160,5 +175,6 @@ timetablerouter.post('/AlldataforTimeTable', async (c) => {
         return c.json({ message: "Error fetching timetable data." });
     }
 });
-// timetablerouter.use('/updater' , updateRoutes);
-// timetablerouter.use('/deleter' , deleteRoutes);
+
+timetablerouter.route('/updater' , updateRoutes);
+timetablerouter.route('/deleter' , deleteRoutes);

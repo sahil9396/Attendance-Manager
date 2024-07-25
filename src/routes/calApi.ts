@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { PrismaClient } from '@prisma/client/edge';
 import { withAccelerate } from '@prisma/extension-accelerate';
-import { google } from 'googleapis';
-const cors = require('cors');
+import { cors } from 'hono/cors';
+
 import {
     getCookie,
     getSignedCookie,
@@ -11,12 +11,15 @@ import {
     deleteCookie,
 } from 'hono/cookie'
 
-const calAPirouter = new Hono<{
+export const calAPirouter = new Hono<{
   Bindings: {
     DATABASE_URL: string,
     CLIENT_ID: string,
     CLIENT_SECRET: string,
     REDIRECT_URL: string,
+  },
+  Variables: {
+    accessToken: string,
   }
 }>();
 
@@ -25,72 +28,113 @@ calAPirouter.use(cors({
   credentials: true,
 }));
 
-const client_id = process.env.CLIENT_ID;
-const client_secret = process.env.CLIENT_SECRET;
-const redirect_uri = process.env.REDIRECT_URL;
+async function getTokenHttp(things:any,client_id:string,client_secret:string) {
+  const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+  const tokenResponse = await fetch(GOOGLE_TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({...things,client_id,client_secret}),
+  });
 
-// validate the tokens
-async function validateToken(c:any) {
-  const { refreshToken } = await getCookie(c);
-  let { authorization: accessToken, username } = await c.req.header();
-  if (!accessToken || !refreshToken || !username) {
-    return c.status(401).json({ message: 'Unauthorized: Missing credentials' });
-  }
+  const tokenData = await tokenResponse.json();
+ 
+  return tokenData;
+}
+
+async function CheckExpiryAndAuthorization(c:any) {
+  let {authorization:accessToken} = c.req.header();
+  const {expiraryTime} = c.req.query();
+  const {refreshToken} = getCookie(c);
   accessToken = accessToken.split(' ')[1];
-
-  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
-  await oAuth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
-  try {
-    const TokenInfo = await oAuth2Client.getTokenInfo(accessToken);
-
-    if (TokenInfo.email_verified === true && TokenInfo.email === username) {
-      await c.next();
-    } else {
-      console.log(TokenInfo.email === username, TokenInfo.email_verified);
-      c.status(401);
-      return c.json({ message: 'Unauthorized' });
-    }
-  } catch (error) {
-    console.error('Error validating token:', error);
-    c.status(500);
-    return  c.json({ message: 'Internal Server Error' });
+  if (accessToken) {
+      c.status(401)
+      return c.json({
+          message: 'Unauthorized',
+      });
   }
+  if (expiraryTime < 0) {
+    const { accessToken } : any = await getTokenHttp({refresh_token: refreshToken, grant_type: 'refresh_token'},c.env.CLIENT_ID,c.env.CLIENT_SECRET);
+    c.set("accessToken", accessToken);
+  }
+  await c.next();
 }
 
-const color_id = {
-  'p': '2',
-  'a': '11',
-  'c': '5'
-};
+calAPirouter.get('/oauth2callback', async (c) => {
+  const {  refreshToken } = getCookie(c);
+  const {  authorization : Authorization} = c.req.header();
+  const code = Authorization.split(' ')[1];
 
-interface createType {
-  accessToken: string,
-  refreshToken: string,
-  eventDetails: any
-}
+  const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
+  
+  try {
+      const tokenDatas = refreshToken ? {refresh_token: refreshToken, grant_type: 'refresh_token'} : {code, grant_type: 'authorization_code', redirect_uri: c.env.REDIRECT_URL};
+      const TokenData :any = await getTokenHttp(tokenDatas,c.env.CLIENT_ID,c.env.CLIENT_SECRET);
+      !refreshToken && setCookie(c,'refreshToken', TokenData.refresh_token, {httpOnly: true,secure: false});
+      !refreshToken && await prisma.user.create({
+          data: {
+              email: TokenData.email,
+          }
+      })
+      c.status(200);
+      return c.json({token:TokenData});
+  } catch (error) {
+      c.status(500);
+      c.json({
+          message: 'Error getting accessToken',
+      });
+  }
+});
 
-// Function to set credentials and create an event
-async function createCalendarEvent({ accessToken, refreshToken, eventDetails }: createType) {
-  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
-  oAuth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+calAPirouter.get('/auth/check', async (c) => {
+  const {refreshToken} = getCookie(c);
+  const sendingData = !refreshToken ? {
+      LoginIn: false,
+      refreshToken: false
+  } : {
+      LoginIn: true,
+      token: await getTokenHttp({refreshToken, grant_type: 'refresh_token'},c.env.CLIENT_ID,c.env.CLIENT_SECRET)
+  }
+  c.status(200);
+  return c.json({sendingData});
+});
 
-  const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
+calAPirouter.get('/logout',CheckExpiryAndAuthorization, async (c) => {
+  deleteCookie(c,"refreshToken");
+  return c.json({
+      message:"You are Loggout successfully"
+  })
+});
+
+calAPirouter.get('/userinfo', async (c) => {
+
+  const {refreshToken} = getCookie(c);
+
+  const {  authorization : Authorization} = c.req.header();
+  const accessToken = Authorization.split(' ')[1];
 
   try {
-    const response = await calendar.events.insert({
-        calendarId:'primary',
-        requestBody: eventDetails,
-        // resource: eventDetails,
-    });
-    return response;
+      const GOOGLE_USERINFO_ENDPOINT = `https://www.googleapis.com/oauth2/v2/userinfo?alt=json&access_token=${accessToken}`;
+      const data = await fetch(GOOGLE_USERINFO_ENDPOINT, {
+          method: 'GET',
+          headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`
+      }});
+      const dataParses = await data.json();
+      return c.json({dataParses})
   } catch (error) {
-    console.error('Error creating event:', error);
-    throw new Error('Error creating event: ' + error);
+      console.error('Error getting user info:', error);
+      c.status(500)
+      return c.json({
+          error
+      });
   }
-}
+});
 
 // Helper function to get the current date in YYYY-MM-DD format.
-const getDate = () => {
+export const getDate = () => {
   const today = new Date();
   let date = (today.getDate()).toString().padStart(2, '0');
   let month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -98,131 +142,70 @@ const getDate = () => {
   return `${year}-${month}-${date}`;
 }
 
-// Function to show events on the user's primary calendar for the current date.
-const showEvent = async (MaxDays:number, auth:any) => {
-  const calendar = google.calendar({ version: 'v3', auth });
+// Function to set credentials and create an event
+export async function createCalendarEvent(accessToken:string, eventDetails:any) {
   try {
-    const res = await calendar.events.list({
-      calendarId: 'en.indian#holiday@group.v.calendar.google.com',
-      timeMin: `${getDate()}T00:00:00+05:30`,
-      maxResults: MaxDays,
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
-    const events = res.data.items;
-    if (!events || events.length === 0) {
-      console.log('No upcoming events found.');
-      return [];
-    }
-    return events;
+      const GOOGLE_CREATE_ENDPOINT = `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
+      let response = await fetch(GOOGLE_CREATE_ENDPOINT, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify(eventDetails),
+      });
+      response = await response.json();
+      return response;
   } catch (error) {
-    console.error('Error showing events:', error);
-    throw new Error('Error showing events: ' + error);
+      throw new Error('Error creating event: ' + error);
   }
 }
 
-calAPirouter.get('/FutureEvents', validateToken, async (c) => {
-  const { refreshToken } = await getCookie(c);
-  let { authorization: accessToken } = await c.req.header();
+const event = {
+  summary: 'Google I/O 2022',
+  location: '800 Howard St., San Francisco, CA 94103',
+  description: 'A chance to hear more about Google\'s developer products.',
+  start: {
+      dateTime: '2024-07-26T09:00:00+05:30',
+      timeZone: 'IST',
+  },
+  end: {
+      dateTime: '2024-07-26T17:00:00+05:30',
+      timeZone: 'IST',
+  },
+}
+
+// const accessToken = "ya29.a0AXooCgvOUwcxWAfT45wX41vJL9R8zharY9om1VwfSFEp9794RKCYstVCW9yRD_YBgxlZ8vKXPUtx3YHt0RjBHBp1ck74XL2-ZrifahAFWeZ_yIBPt17HMr_inmlGejNS6fzr20zP8HkLeXPtHA44TpWA-gTu7zPowhdtUwaCgYKAVwSARMSFQHGX2MiCV4UfyRdMZ7YtjYjH40URQ0173"
+
+// Function to show events on the user's primary calendar for the current date.
+const showEvent = async (MaxDays:number,accessToken:string) => {
+  const GOOGLE_VIEW_ENDPOINT = `https://www.googleapis.com/calendar/v3/calendars/en.indian%23holiday%40group.v.calendar.google.com/events?timeMin=${getDate()}T00%3A00%3A00%2B05%3A30&maxResults=${MaxDays}&singleEvents=true&orderBy=startTime&access_token=${accessToken}`;
+  const res = await fetch(GOOGLE_VIEW_ENDPOINT,{
+      method: 'GET',
+      headers: {
+          'Content-Type': 'application/json',
+      }
+  });
+  const events:any = await res.json();
+  return events.items;
+}
+
+calAPirouter.get('/FutureEvents', async (c) => {
+  const {refreshToken} = getCookie(c);
+  let {authorization:accessToken} = c.req.header();
   accessToken = accessToken.split(' ')[1];
-
-  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
-  await oAuth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
-  console.log("It is starting!!!");
-
   try {
-    const future_events = await showEvent(2, oAuth2Client);
-    console.log("It is done!!!");
-    c.status(200);
-    return c.json(future_events);
+      const future_events = await showEvent(2,accessToken);
+      c.json({future_events});
   } catch (error) {
-    console.error('Error fetching future events:', error);
-    c.status(500);
-    return c.json({ message: 'Internal Server Error' });
+      c.status(500)
+      c.json({ error: error });
   }
 });
 
-calAPirouter.get('/auth/check', async (c) => {
-  const { refreshToken } = await getCookie(c);
-  if (!refreshToken) {
-    return c.json({
-      LoginIn: false,
-      refreshToken: false
-    });
-  }
-  try {
-    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
-    oAuth2Client.setCredentials({ refresh_token: refreshToken });
-    const accessToken = await oAuth2Client.getAccessToken();
-    c.status(200);
-    return c.json({ LoginIn: true, accessToken: accessToken.token });
-  } catch (error) {
-    console.log('Error in check:', error);
-    c.status(500);
-    return c.json({
-      LoginIn: false,
-      refreshToken: false,
-      message: 'Internal Server Error'
-    });
-  }
-});
-
-calAPirouter.get('/oauth2callback', async (c) => {
-  const { refreshToken } = await getCookie(c);
-  const { authorization: Authorization } = await c.req.header();
-  const code = Authorization.split(' ')[1];
-  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
-
-  try {
-    if (!refreshToken) {
-      const { tokens } = await oAuth2Client.getToken(code);
-      await oAuth2Client.setCredentials(tokens);
-      setCookie(c,'refreshToken', tokens.refresh_token || '', { httpOnly: true, secure: false });
-      return c.json({ accessToken: tokens.access_token });
-    }
-    await oAuth2Client.setCredentials({ refresh_token: refreshToken });
-    const accessTokenGet = await oAuth2Client.getAccessToken();
-    c.status(200);
-    return c.json({ accessToken: accessTokenGet.token });
-  } catch (error) {
-    console.error('Error getting accessToken:', error);
-    c.status(500);
-    return c.json({ message: 'Failed to get accessToken' });
-  }
-});
-
-calAPirouter.get('/userinfo', async (c) => {
-  const { refreshToken } = await getCookie(c);
-  const { authorization: Authorization } = await c.req.header();
-  const code = Authorization.split(' ')[1];
-  try {
-    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
-    oAuth2Client.setCredentials({ access_token: code, refresh_token: refreshToken });
-
-    const oauth2 = google.oauth2({ version: 'v2', auth: oAuth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    c.status(500);
-    return c.json(userInfo.data);
-  } catch (error) {
-    console.error('Error getting user info:', error);
-    c.status(500);
-    return c.json({ message: 'Error getting user info' });
-  }
-});
-
-calAPirouter.get('/logout', async (c) => {
-  try {
-    await deleteCookie(c,"refreshToken");
-    c.status(200);
-    return c.json({
-        message: "You have logged out successfully"
-    });
-  } catch (error) {
-    console.error('Error logging out:', error);
-    c.status(500);
-    return c.json({ message: 'Error logging out' });
-  }
-});
-
-// export default calAPirouter;
-module.exports = {calAPirouter , createCalendarEvent,color_id , getDate, showEvent, validateToken};
+// const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
+const color_id = {
+  'p': '2',
+  'a': '11',
+  'c': '5'
+};

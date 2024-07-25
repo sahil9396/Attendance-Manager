@@ -1,28 +1,34 @@
 import { Hono } from 'hono'
-import { PrismaClient } from '@prisma/client/edge'
-import { withAccelerate } from '@prisma/extension-accelerate'
-import { getCookie , setCookie } from 'hono/cookie'
+// import { oauth2 } from 'googleapis/build/src/apis/oauth2';
+import {timetablerouter} from './routes/timetable';
+import {calAPirouter} from './routes/calApi';
+import { cors } from 'hono/cors';
 
-const app = new Hono<{
-  Bindings:{
-    DATABASE_URL: string
+const app = new Hono()
+
+
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+}));
+
+app.get('/stsrt',async (c)=>{
+  console.log("ji");
+  try {
+    c.status(200);
+    return c.json({
+      message:"Hi there!!!"
+    })
+  } catch (error) {
+    console.log(error);
+    c.status(500);
+    c.json({
+      messgae:"Hi there!!!"
+    })
   }
-}>()
-
-app.get('/start', async (c) => {
-  const body = await c.req.json();
-  // const prisma = new PrismaClient({datasourceUrl: c.env.DATABASE_URL,}).$extends(withAccelerate());
-  setCookie(c,"name", "value",{
-    httpOnly: true,
-    secure: false,
-  });
-  const { authorization} = await c.req.header();
-  const head = await c.req.header();
-  const cok = await getCookie(c);
-  const query = await c.req.query();
-  // console.log(body, head, query,cok);
-  // return c.text('Hello Hono!');
-  return c.json({body, head, query,cok});
 })
+
+app.route('/timetable',timetablerouter );
+app.route('/gapi/api', calAPirouter);
 
 export default app

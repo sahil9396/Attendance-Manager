@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { PrismaClient } from '@prisma/client/edge';
 import { withAccelerate } from '@prisma/extension-accelerate';
-const cors = require('cors');
+// const cors = require('cors');
+import { cors } from 'hono/cors';
 
-const deleteRoutes = new Hono<{
+export const deleteRoutes = new Hono<{
   Bindings: {
     DATABASE_URL: string,
     CLIENT_ID: string,
@@ -37,24 +38,25 @@ deleteRoutes.get('/deleteCourse', async (c) => {
         });
 
         const deletedCourse = prisma.courses.deleteMany({
-        where: {
-            IndivCourse,
-            userDetails: {
-            email: assignedBy,
-            },
-        }
+          where: {
+              IndivCourse,
+              userDetails: {
+              email: assignedBy,
+              },
+          }
         });
 
         const result = await prisma.$transaction([deletedDayCourse, deletedCourse]);
+        console.log(result);
         c.status(200);
-        c.json(result);
+        return c.json(result);
   } catch (error) {
-        console.error(error);
-        c.status(500)
-        c.json({
-        error,
-        message: "Error deleting the course.",
-        });
+    console.error(error);
+    c.status(500)
+    return c.json({
+    error,
+    message: "Error deleting the course.",
+    });
   }
 });
 
@@ -80,11 +82,11 @@ deleteRoutes.get('/deleteDay', async (c) => {
     });
 
     c.status(200)
-    c.json(deletedDayCourse);
+    return c.json(deletedDayCourse);
   } catch (error) {
         console.error(error);
         c.status(500)
-        c.json({
+        return c.json({
         error,
         message: "Error deleting the day.",
         });
@@ -112,16 +114,16 @@ deleteRoutes.get('/deleteallCourse', async (c) => {
     });
 
     const result = await prisma.$transaction([allDeletedCoursesForThatDay, allDeletedDays]);
-    c.status(200)
-    c.json(result);
+    c.status(200);
+    return c.json(result);
   } catch (error) {
         console.error(error);
         c.status(500)
-        c.json({
+        return c.json({
         error,
         message: "Error deleting all courses.",
         });
   }
 });
 
-export default deleteRoutes;
+// export deleteRoutes;

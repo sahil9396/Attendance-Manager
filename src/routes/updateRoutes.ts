@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
+import { google } from 'googleapis';
 import { PrismaClient } from '@prisma/client/edge';
 import { withAccelerate } from '@prisma/extension-accelerate';
-// import { createCalendarEvent, color_id, getDate } from './calApi';
-const {createCalendarEvent, color_id, getDate} = require('./calApi');
-const cors = require('cors');
+import {createCalendarEvent,getDate} from './calApi';
+// const {createCalendarEvent, color_id, getDate} = require('./calApi');
+import { cors } from 'hono/cors';
 import {
     getCookie,
     getSignedCookie,
@@ -12,7 +13,7 @@ import {
     deleteCookie,
 } from 'hono/cookie'
 
-const updateRoutes = new Hono<{
+export const updateRoutes = new Hono<{
     Bindings: {
         DATABASE_URL: string,
         CLIENT_ID: string,
@@ -26,9 +27,22 @@ updateRoutes.use(cors({
     credentials: true,
 }));
 
+interface eventType{
+    summary: string,
+    start: {
+        dateTime: string,
+        timeZone: string,
+    },
+    end: {
+        dateTime: string,
+        timeZone: string,
+    },
+    colorId: string
+}
+
 // Update the present, absent, and cancelled classes for that user
 updateRoutes.put('/updateAttendance', async (c) => {
-    const { assignedBy, IndivCourse, present, absent, cancelled, status, timeofcourse } = await c.req.json();
+    const { assignedBy, IndivCourse, present, absent, cancelled, status, timeofcourse }:any = await c.req.json();
     let { authorization: tokens } = c.req.header();
     const { refreshToken } = getCookie(c);
     tokens = tokens?.split(' ')[1];
@@ -50,8 +64,7 @@ updateRoutes.put('/updateAttendance', async (c) => {
                 cancelled,
             }
         });
-
-        const event = {
+        const event:eventType = {
             summary: IndivCourse,
             start: {
                 dateTime: `${getDate()}T${start}:00+05:30`,
@@ -61,17 +74,15 @@ updateRoutes.put('/updateAttendance', async (c) => {
                 dateTime: `${getDate()}T${end}:00+05:30`,
                 timeZone: 'IST',
             },
-            colorId: color_id[status]
+            colorId:( status === 'p'?'2': status === 'a' ?'11':'5')
         };
-
-        const createCourseResponse = await createCalendarEvent(tokens, refreshToken, event);
-        console.log("createCourseResponse:", createCourseResponse.htmlLink);
+        const createdData = await createCalendarEvent(tokens, event);
         c.status(200)
-        c.json(updatedCourse);
+        return c.json({updatedCourse, createdData});
     } catch (error) {
         console.error(error);
         c.status(500)
-        c.json({
+        return c.json({
             error,
             message: "Error updating attendance.",
         });
@@ -111,11 +122,11 @@ updateRoutes.put('/updateSetOfCourses', async (c) => {
 
         const result = await prisma.$transaction(updatePromises);
         c.status(200)
-        c.json(result);
+        return c.json(result);
     } catch (error) {
         console.error(error);
         c.status(500)
-        c.json({
+        return c.json({
             error,
             message: "Error updating the set of courses.",
         });
@@ -141,11 +152,11 @@ updateRoutes.put('/resetIndividualCourse', async (c) => {
         });
 
         c.status(200)
-        c.json(resetCourse);
+        return c.json(resetCourse);
     } catch (error) {
         console.error(error);
         c.status(500)
-        c.json({
+        return c.json({
             error,
             message: "Error resetting individual course.",
         });
@@ -170,15 +181,15 @@ updateRoutes.put('/resetAttendance', async (c) => {
         });
 
         c.status(200)
-        c.json(resetCourses);
+        return c.json(resetCourses);
     } catch (error) {
         console.error(error);
         c.status(500)
-        c.json({
+        return c.json({
             error,
             message: "Error resetting attendance.",
         });
     }
 });
 
-export default updateRoutes;
+// export default updateRoutes;
