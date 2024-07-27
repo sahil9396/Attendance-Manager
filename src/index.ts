@@ -10,22 +10,14 @@ const app = new Hono<{
   }
 }>()
 
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true,
-}));
 // app.use(cors({
-//   origin: 'https://attendance-frontend-kjovk5ezp-sahil9396s-projects.vercel.app',
+//   origin: 'http://localhost:5173',
 //   credentials: true,
 // }));
-
-// app.use(async (c, next) => {
-//   cors({
-//     origin:`${c.env.REDIRECT_URL}`,
-//     credentials:true
-//   })
-//   await next();
-// });
+app.use(cors({
+  origin: 'https://attendance-frontend-kjovk5ezp-sahil9396s-projects.vercel.app',
+  credentials: true,
+}));
 
 app.route('/timetable',timetablerouter );
 app.route('/gapi/api', calAPirouter);

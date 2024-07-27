@@ -1,13 +1,11 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-
 import {
     getCookie,
     setCookie,
     deleteCookie,
 } from 'hono/cookie'
-import { decode, sign, verify } from 'hono/jwt';
-import { assuredworkloads } from 'googleapis/build/src/apis/assuredworkloads';
+import { sign, verify } from 'hono/jwt';
 import { JWTPayload } from 'hono/utils/jwt/types';
 
 export const calAPirouter = new Hono<{
