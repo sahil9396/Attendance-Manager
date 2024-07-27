@@ -2,16 +2,9 @@ import { Hono } from 'hono';
 import { google } from 'googleapis';
 import { PrismaClient } from '@prisma/client/edge';
 import { withAccelerate } from '@prisma/extension-accelerate';
-import {createCalendarEvent,getDate} from './calApi';
+import {createCalendarEvent,getDate,CheckExpiryAndAuthorization} from './calApi';
 // const {createCalendarEvent, color_id, getDate} = require('./calApi');
 import { cors } from 'hono/cors';
-import {
-    getCookie,
-    getSignedCookie,
-    setCookie,
-    setSignedCookie,
-    deleteCookie,
-} from 'hono/cookie'
 
 export const updateRoutes = new Hono<{
     Bindings: {
@@ -19,13 +12,19 @@ export const updateRoutes = new Hono<{
         CLIENT_ID: string,
         CLIENT_SECRET: string,
         REDIRECT_URL: string,
+    },
+    Variables: {
+        accessToken: string,
     }
 }>();
 
-updateRoutes.use(cors({
-    origin: 'http://localhost:5173',
-    credentials: true,
-}));
+updateRoutes.use(async (c, next) => {
+    cors({
+      origin:`${c.env.REDIRECT_URL}`,
+      credentials:true
+    })
+    await next();
+});
 
 interface eventType{
     summary: string,
@@ -41,11 +40,12 @@ interface eventType{
 }
 
 // Update the present, absent, and cancelled classes for that user
-updateRoutes.put('/updateAttendance', async (c) => {
+updateRoutes.put('/updateAttendance',CheckExpiryAndAuthorization, async (c) => {
     const { assignedBy, IndivCourse, present, absent, cancelled, status, timeofcourse }:any = await c.req.json();
-    let { authorization: tokens } = c.req.header();
-    const { refreshToken } = getCookie(c);
-    tokens = tokens?.split(' ')[1];
+    // let { authorization: tokens } = c.req.header();
+    // const { refreshToken } = getCookie(c);
+    // tokens = tokens?.split(' ')[1];
+    const tokens = c.get('accessToken');
 
     const [start, end] = timeofcourse.split(' - ').map((time:string) => time.split(" ")[0]);
 
@@ -80,7 +80,7 @@ updateRoutes.put('/updateAttendance', async (c) => {
         c.status(200)
         return c.json({updatedCourse, createdData});
     } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({
             error,
@@ -124,7 +124,7 @@ updateRoutes.put('/updateSetOfCourses', async (c) => {
         c.status(200)
         return c.json(result);
     } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({
             error,
@@ -154,7 +154,7 @@ updateRoutes.put('/resetIndividualCourse', async (c) => {
         c.status(200)
         return c.json(resetCourse);
     } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({
             error,
@@ -183,7 +183,7 @@ updateRoutes.put('/resetAttendance', async (c) => {
         c.status(200)
         return c.json(resetCourses);
     } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({
             error,

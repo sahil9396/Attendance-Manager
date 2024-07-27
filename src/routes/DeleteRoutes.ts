@@ -13,10 +13,12 @@ export const deleteRoutes = new Hono<{
   }
 }>();
 
-deleteRoutes.use(cors({
-    origin:'http://localhost:5173',
-    credentials: true,
-}));
+deleteRoutes.use(async (c, next) => {
+  cors({
+    origin:`${c.env.REDIRECT_URL}`
+  })
+  await next();
+});
 
 // Delete a particular course for that user
 deleteRoutes.get('/deleteCourse', async (c) => {
@@ -47,11 +49,11 @@ deleteRoutes.get('/deleteCourse', async (c) => {
         });
 
         const result = await prisma.$transaction([deletedDayCourse, deletedCourse]);
-        console.log(result);
+        // console.log(result);
         c.status(200);
         return c.json(result);
   } catch (error) {
-    console.error(error);
+    // console.error(error);
     c.status(500)
     return c.json({
     error,
@@ -84,7 +86,7 @@ deleteRoutes.get('/deleteDay', async (c) => {
     c.status(200)
     return c.json(deletedDayCourse);
   } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({
         error,
@@ -117,12 +119,12 @@ deleteRoutes.get('/deleteallCourse', async (c) => {
     c.status(200);
     return c.json(result);
   } catch (error) {
-        console.error(error);
-        c.status(500)
-        return c.json({
-        error,
-        message: "Error deleting all courses.",
-        });
+    // console.error(error);
+    c.status(500)
+    return c.json({
+    error,
+    message: "Error deleting all courses.",
+    });
   }
 });
 

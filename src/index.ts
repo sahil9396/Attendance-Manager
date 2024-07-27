@@ -4,29 +4,28 @@ import {timetablerouter} from './routes/timetable';
 import {calAPirouter} from './routes/calApi';
 import { cors } from 'hono/cors';
 
-const app = new Hono()
-
+const app = new Hono<{
+  Bindings:{
+    REDIRECT_URL:string
+  }
+}>()
 
 app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true,
 }));
+// app.use(cors({
+//   origin: 'https://attendance-frontend-kjovk5ezp-sahil9396s-projects.vercel.app',
+//   credentials: true,
+// }));
 
-app.get('/stsrt',async (c)=>{
-  console.log("ji");
-  try {
-    c.status(200);
-    return c.json({
-      message:"Hi there!!!"
-    })
-  } catch (error) {
-    console.log(error);
-    c.status(500);
-    c.json({
-      messgae:"Hi there!!!"
-    })
-  }
-})
+// app.use(async (c, next) => {
+//   cors({
+//     origin:`${c.env.REDIRECT_URL}`,
+//     credentials:true
+//   })
+//   await next();
+// });
 
 app.route('/timetable',timetablerouter );
 app.route('/gapi/api', calAPirouter);

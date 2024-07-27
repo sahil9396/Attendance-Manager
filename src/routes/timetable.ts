@@ -22,17 +22,13 @@ export const timetablerouter = new Hono<{
     }
 }>();
 
-timetablerouter.use(cors({
-    origin: 'http://localhost:5173',
-    credentials: true,
-}));
-
-timetablerouter.get('/',async (c)=>{
-  console.log("ji");
-  return c.json({
-    message:"Hi there!!!"
+timetablerouter.use(async (c, next) => {
+  cors({
+    origin:`${c.env.REDIRECT_URL}`,
+    credentials:true
   })
-})
+  await next();
+});
 
 timetablerouter.post('/create', async (c) => {
     const { assignedBy, inputData, day } = await c.req.json();
@@ -57,7 +53,6 @@ timetablerouter.post('/create', async (c) => {
         }
       });
 
-      console.log(courseExists);
       if (courseExists) {
         c.status(200)
         return c.json({ message: "Course already exists", exists: true });
@@ -71,14 +66,14 @@ timetablerouter.post('/create', async (c) => {
           present: inputData.present || 0,
           absent: inputData.absent || 0,
           cancelled: inputData.cancelled || 0,
-          criteria: inputData.criteria || "75%",
+          criteria: Number(inputData.criteria) || 75,
           userDetails: { connectOrCreate:{ where: { email: assignedBy }, create: { email: assignedBy } } },
           thatday: { create: datacreated }
         }
       });
       return c.json({ message: createdData });
     } catch (error) {
-      console.error(error);
+      // console.error(error);
       c.status(500)
       return c.json({ error, message: "An error occurred while creating the course." });
     }
@@ -101,7 +96,7 @@ timetablerouter.get('/getallcoursesAtthatday', async (c) => {
     c.status(200)
     return c.json({ message: allCourses });
     } catch (error) {
-      console.error(error);
+      // console.error(error);
     c.status(500)
     return c.json({ message: "Error fetching courses for the specified day." });
     }
@@ -122,7 +117,7 @@ timetablerouter.get('/getallcourses', async (c) => {
         c.status(200)
         return c.json({ message: filteredCourses });
     } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({ message: "Error fetching all courses." });
     }
@@ -133,7 +128,6 @@ timetablerouter.post('/AlldataforTimeTable', async (c) => {
     const { assignedBy } = c.req.query();
     const { courseNames } = await c.req.json();
     const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
-    console.log(courseNames);
   
     try {
         const daysPromise = courseNames.map((course: any) => 
@@ -170,7 +164,7 @@ timetablerouter.post('/AlldataforTimeTable', async (c) => {
         c.status(200)
         return c.json({ coursesWithTheirDays, daysWithTheirCourses });
     } catch (error) {
-        console.error(error);
+        // console.error(error);
         c.status(500)
         return c.json({ message: "Error fetching timetable data." });
     }
