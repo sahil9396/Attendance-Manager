@@ -23,7 +23,8 @@ export const calAPirouter = new Hono<{
 
 calAPirouter.use(async (c, next) => {
   cors({
-    origin:`${c.env.REDIRECT_URL}`
+    origin:`${c.env.REDIRECT_URL}`,
+    credentials:true
   })
   await next();
 });
@@ -59,7 +60,7 @@ export async function CheckExpiryAndAuthorization(c:any,next:any) {
 
 calAPirouter.get('/auth/check', async (c) => {
   const {__Secure_token} = getCookie(c);
-  if (!__Secure_token) {
+  if (!__Secure_token || __Secure_token === 'undefined') {
     c.status(200);
     return c.json({
       LoginIn: false,
@@ -67,7 +68,7 @@ calAPirouter.get('/auth/check', async (c) => {
     });
   }
   try {
-    const sendingData:any = await getTokenHttp({refresh_token:__Secure_token, grant_type: 'refresh_token'},c.env.CLIENT_ID,c.env.CLIENT_SECRET)
+    const sendingData:any = await getTokenHttp({refresh_token:__Secure_token, grant_type: 'refresh_token'},c.env.CLIENT_ID,c.env.CLIENT_SECRET);
     c.status(200);
     return c.json({
       LoginIn: true,
@@ -88,6 +89,13 @@ calAPirouter.get('/oauth2callback', async (c) => {
   try {
     const tokenDatas = {code, grant_type: 'authorization_code', redirect_uri: c.env.REDIRECT_URL};
     const TokenData :any = await getTokenHttp(tokenDatas,c.env.CLIENT_ID,c.env.CLIENT_SECRET);
+    if (TokenData.error) {
+      c.status(500);
+      return c.json({
+        message:"There is an error check",
+        error:TokenData.error
+      })
+    }
     setCookie(c,'__Secure_token', TokenData.refresh_token, {httpOnly: true,secure: true, sameSite: 'none'});
     c.status(200);
     return c.json({token:TokenData});
@@ -100,12 +108,22 @@ calAPirouter.get('/oauth2callback', async (c) => {
 });
 
 calAPirouter.get('/logout',CheckExpiryAndAuthorization, async (c) => {
-  deleteCookie(c,'__Secure_token',{
-    secure: true,
-  });
-  return c.json({
-      message:"You are Loggout successfully"
-  })
+  try {
+    deleteCookie(c,'__Secure_token',{
+      secure: true,
+      domain: 'https://backendfolder.sahilarchansreekanth.workers.dev',
+      path: '/'
+    });
+    c.status(200);
+    return c.json({
+        message:"You are Loggout successfully"
+    })
+  } catch (error) {
+    c.status(500);
+    return c.json({
+        message:"Error in logging out"
+    })    
+  }
 });
 
 calAPirouter.get('/userinfo',CheckExpiryAndAuthorization, async (c) => {
