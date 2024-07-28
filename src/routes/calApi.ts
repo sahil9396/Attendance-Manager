@@ -45,10 +45,9 @@ export async function getTokenHttp(things:any,client_id:string,client_secret:str
 
 export async function CheckExpiryAndAuthorization(c:any,next:any) {
   // const {refreshToken} = getCookie(c);
-  let {authorization:accessTokenHead} = c.req.header();
-  accessTokenHead = accessTokenHead.split(' ')[1];
-  let accessToken = accessTokenHead;
-  if (!accessTokenHead) {
+  let {authorization : accessToken} = c.req.header();
+  accessToken = accessToken.split(' ')[1];
+  if (!accessToken) {
       c.status(401)
       return c.json({
           message: 'Unauthorized',
@@ -60,22 +59,23 @@ export async function CheckExpiryAndAuthorization(c:any,next:any) {
 
 calAPirouter.get('/auth/check', async (c) => {
   const {__Secure_token} = getCookie(c);
-  try {
-    const tokenRefresh:JWTPayload = __Secure_token ? await verify(__Secure_token,c.env.JWT_KEY) : {
-      __Secure_token: 'null'
-    }
-    const sendingData = !__Secure_token ? {
-        LoginIn: false,
-        token: false
-    } : {
-        LoginIn: true,
-        token: await getTokenHttp({refresh_token:tokenRefresh.token, grant_type: 'refresh_token'},c.env.CLIENT_ID,c.env.CLIENT_SECRET)
-    }
+  if (!__Secure_token) {
     c.status(200);
-    return c.json(sendingData);
+    return c.json({
+      LoginIn: false,
+      token: false
+    });
+  }
+  try {
+    const sendingData:any = await getTokenHttp({refresh_token:__Secure_token, grant_type: 'refresh_token'},c.env.CLIENT_ID,c.env.CLIENT_SECRET)
+    c.status(200);
+    return c.json({
+      LoginIn: true,
+      token: sendingData.access_token
+    });
   } catch (error) {
-    // console.error(error);
-    c.status(401);
+    console.log(error);
+    c.status(403);
     return c.json({
       message:"HI"
     })
@@ -83,27 +83,24 @@ calAPirouter.get('/auth/check', async (c) => {
 });
 
 calAPirouter.get('/oauth2callback', async (c) => {
-  const {  __Secure_token } = getCookie(c);
   const {  authorization : Authorization} = c.req.header();
   const code = Authorization.split(' ')[1];
-
   try {
-      const tokenDatas =__Secure_token ? {refresh_token:__Secure_token, grant_type: 'refresh_token'} : {code, grant_type: 'authorization_code', redirect_uri: c.env.REDIRECT_URL};
-      const TokenData :any = await getTokenHttp(tokenDatas,c.env.CLIENT_ID,c.env.CLIENT_SECRET);
-      const tokenEnctyp = await sign({token:TokenData.refresh_token},c.env.JWT_KEY);
-      !__Secure_token && setCookie(c,'__Secure_token', tokenEnctyp, {httpOnly: true,secure: true, sameSite: 'none'});
-      c.status(200);
-      return c.json({token:TokenData.access_token});
+    const tokenDatas = {code, grant_type: 'authorization_code', redirect_uri: c.env.REDIRECT_URL};
+    const TokenData :any = await getTokenHttp(tokenDatas,c.env.CLIENT_ID,c.env.CLIENT_SECRET);
+    setCookie(c,'__Secure_token', TokenData.refresh_token, {httpOnly: true,secure: true, sameSite: 'none'});
+    c.status(200);
+    return c.json({token:TokenData});
   } catch (error) {
-      c.status(500);
-      c.json({
-          message: 'Error getting accessToken',
-      });
+    c.status(500);
+    c.json({
+        message: 'Error getting accessToken',
+    });
   }
 });
 
 calAPirouter.get('/logout',CheckExpiryAndAuthorization, async (c) => {
-  deleteCookie(c,'token',{
+  deleteCookie(c,'__Secure_token',{
     secure: true,
   });
   return c.json({

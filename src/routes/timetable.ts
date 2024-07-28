@@ -10,7 +10,6 @@ import { cors } from 'hono/cors';
 import {
     getCookie,
 } from 'hono/cookie'
-import { some } from 'hono/combine';
 
 
 export const timetablerouter = new Hono<{

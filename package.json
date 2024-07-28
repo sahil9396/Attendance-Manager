@@ -12,6 +12,7 @@
     "dotenv": "^16.4.5",
     "googleapis": "^140.0.1",
     "hono": "^4.5.1",
+    "hono-sessions": "^0.5.8",
     "prisma": "^5.17.0"
   },
   "devDependencies": {
