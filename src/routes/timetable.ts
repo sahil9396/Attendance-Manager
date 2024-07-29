@@ -78,41 +78,76 @@ timetablerouter.post('/create', async (c) => {
     }
 });
 
-// Route to get all courses of that user on a specific day.
-timetablerouter.get('/getallcoursesAtthatday', async (c) => {
-    const { assignedBy, day } = getCookie(c);
-    const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
+// Route to get all courses with their days In one route.
+timetablerouter.get('/getEverything', async (c) => {
+  const { assignedBy } = c.req.query();
+  const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
   
-    try {
-      const allCourses = await prisma.courses.findMany({
-        where: {
-          userDetails: { email: assignedBy },
-          thatday: {
-            some: { day: { day: day } }
-          }
-        }
-      });
-    c.status(200)
-    return c.json({ message: allCourses });
-    } catch (error) {
-      // console.error(error);
+  try {
+    const allCourses_Prisma = await prisma.user.findUnique({
+      where: { email: assignedBy },
+      include: {
+        courses: {
+          include: {
+            thatday: {
+              include: {
+                day: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!allCourses_Prisma) {
+      c.status(404);
+      return c.json({ message: "User not found." });
+    }
+
+    // Transform the data to include only the necessary fields
+    const allcoursesList = allCourses_Prisma.courses.map(course => ({
+      IndivCourse: course.IndivCourse,
+      timeofcourse: course.timeofcourse,
+      Totaldays: course.Totaldays,
+      present: course.present,
+      absent: course.absent,
+      cancelled: course.cancelled,
+      criteria: course.criteria,
+      day: course.thatday.map(dayCourse => dayCourse.day.day), // Extract day names
+    }));
+
+    const CourseWise= allcoursesList.map(course => ({
+      course: course.IndivCourse,
+      day: course.day
+    }));
+
+    const daysWithTheirCourses = allcoursesList.flatMap(course => course.day).filter((day, index, self) => self.indexOf(day) === index)
+    .map(day => ({
+      day,
+      courses: allcoursesList
+      .filter(course => course.day.includes(day))
+      .map(course => course.IndivCourse),
+    }));
+    c.status(200);
+    
+    return c.json({ allcoursesList,  daysWithTheirCourses,CourseWise});
+  } catch (error) {
     c.status(500)
     return c.json({ message: "Error fetching courses for the specified day." });
-    }
-});
+  }
+})
 
 // Route to get all courses of the user.
-timetablerouter.get('/getallcourses', async (c) => {
+timetablerouter.get('/getallcourses_Prisma', async (c) => {
     const { assignedBy } = c.req.query();
     const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
   
     try {
-        const allCourses = await prisma.courses.findMany({
+        const allCourses_Prisma = await prisma.courses.findMany({
         where: { userDetails: { email: assignedBy } },
         include: { thatday: true }
         });
 
-        const filteredCourses = allCourses.filter(course => course.thatday.length > 0);
+        const filteredCourses = allCourses_Prisma.filter(course => course.thatday.length > 0);
         c.status(200)
         return c.json({ message: filteredCourses });
     } catch (error) {

@@ -1,12 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import {
-    getCookie,
-    setCookie,
+    getSignedCookie,
+    setSignedCookie,
     deleteCookie,
 } from 'hono/cookie'
-import { sign, verify } from 'hono/jwt';
-import { JWTPayload } from 'hono/utils/jwt/types';
 
 export const calAPirouter = new Hono<{
   Bindings: {
@@ -45,7 +43,6 @@ export async function getTokenHttp(things:any,client_id:string,client_secret:str
 }
 
 export async function CheckExpiryAndAuthorization(c:any,next:any) {
-  // const {refreshToken} = getCookie(c);
   let {authorization : accessToken} = c.req.header();
   accessToken = accessToken.split(' ')[1];
   if (!accessToken) {
@@ -59,7 +56,7 @@ export async function CheckExpiryAndAuthorization(c:any,next:any) {
 }
 
 calAPirouter.get('/auth/check', async (c) => {
-  const {__Secure_token} = getCookie(c);
+  const {__Secure_token} = await getSignedCookie(c,c.env.JWT_KEY);
   if (!__Secure_token || __Secure_token === 'undefined') {
     c.status(200);
     return c.json({
@@ -86,6 +83,12 @@ calAPirouter.get('/auth/check', async (c) => {
 calAPirouter.get('/oauth2callback', async (c) => {
   const {  authorization : Authorization} = c.req.header();
   const code = Authorization.split(' ')[1];
+  if (!code) {
+    c.status(400);
+    return c.json({
+      message: 'No code provided',
+  });
+  }
   try {
     const tokenDatas = {code, grant_type: 'authorization_code', redirect_uri: c.env.REDIRECT_URL};
     const TokenData :any = await getTokenHttp(tokenDatas,c.env.CLIENT_ID,c.env.CLIENT_SECRET);
@@ -96,10 +99,11 @@ calAPirouter.get('/oauth2callback', async (c) => {
         error:TokenData.error
       })
     }
-    setCookie(c,'__Secure_token', TokenData.refresh_token, {httpOnly: true,secure: true, sameSite: 'none'});
+    await setSignedCookie(c,'__Secure_token', TokenData.refresh_token,c.env.JWT_KEY, {httpOnly: true,secure: true, sameSite: 'none',maxAge: 24*60*60*60});
     c.status(200);
     return c.json({token:TokenData});
   } catch (error) {
+    console.log(error);
     c.status(500);
     c.json({
         message: 'Error getting accessToken',

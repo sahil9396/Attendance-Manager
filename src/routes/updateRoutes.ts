@@ -39,12 +39,58 @@ interface eventType{
     colorId: string
 }
 
+updateRoutes.put('/extraClass',CheckExpiryAndAuthorization, async (c) => {
+    const { assignedBy, IndivCourse, present, absent, cancelled, status, timeofcourse }:any = await c.req.json();
+    const [start, end] = timeofcourse.split(' - ').map((time:string) => time.split(" ")[0]);
+    const tokens = c.get('accessToken');
+    const {permission} = c.req.query();
+    try {
+        const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());
+        const updatedCourse = await prisma.courses.updateMany({
+            where: {
+                userDetails: {
+                    email: assignedBy,
+                },
+                IndivCourse,
+            },
+            data: {
+                present,
+                absent,
+                cancelled,
+            }
+        });
+        if (permission) {
+            const event:eventType = {
+                summary: IndivCourse,
+                start: {
+                    dateTime: `${getDate()}T${start}:00+05:30`,
+                    timeZone: 'IST',
+                },
+                end: {
+                    dateTime: `${getDate()}T${end}:00+05:30`,
+                    timeZone: 'IST',
+                },
+                colorId:( status === '1'?'2':'11')
+            };
+            const createdData = await createCalendarEvent(tokens, event);
+            c.status(200)
+            return c.json(createdData);
+        }
+        c.status(200)
+        return c.json(updatedCourse);
+    } catch (error) {
+        // console.error(error);
+        c.status(500)
+        return c.json({
+            error,
+            message: "Error updating attendance.",
+        });
+    }
+})
+
 // Update the present, absent, and cancelled classes for that user
 updateRoutes.put('/updateAttendance',CheckExpiryAndAuthorization, async (c) => {
     const { assignedBy, IndivCourse, present, absent, cancelled, status, timeofcourse }:any = await c.req.json();
-    // let { authorization: tokens } = c.req.header();
-    // const { refreshToken } = getCookie(c);
-    // tokens = tokens?.split(' ')[1];
     const tokens = c.get('accessToken');
 
     const [start, end] = timeofcourse.split(' - ').map((time:string) => time.split(" ")[0]);
