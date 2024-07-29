@@ -61,7 +61,7 @@ updateRoutes.put('/extraClass',CheckExpiryAndAuthorization, async (c) => {
         });
         if (permission) {
             const event:eventType = {
-                summary: IndivCourse,
+                summary: `Extra Class : ${IndivCourse}`,
                 start: {
                     dateTime: `${getDate()}T${start}:00+05:30`,
                     timeZone: 'IST',
