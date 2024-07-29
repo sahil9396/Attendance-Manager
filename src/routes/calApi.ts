@@ -113,10 +113,13 @@ calAPirouter.get('/oauth2callback', async (c) => {
 
 calAPirouter.get('/logout',CheckExpiryAndAuthorization, async (c) => {
   try {
-    deleteCookie(c,'__Secure_token',{
+    setSignedCookie(c,'__Secure_token','undefined',c.env.JWT_KEY,{
       secure: true,
-      domain: 'https://backendfolder.sahilarchansreekanth.workers.dev',
-      path: '/'
+      // domain: 'https://backendfolder.sahilarchansreekanth.workers.dev',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'none',
+      maxAge: 1
     });
     c.status(200);
     return c.json({

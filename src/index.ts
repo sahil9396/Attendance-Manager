@@ -14,7 +14,7 @@ const app = new Hono<{
 }>()
 
 app.use(cors({
-  origin: ['https://attendance-frontend-k2h04hwgi-sahil9396s-projects.vercel.app','http://localhost:5173'],
+  origin: ['https://attendance-frontend-7rm1swz4c-sahil9396s-projects.vercel.app','http://localhost:5173'],
   credentials: true,
 }));
 

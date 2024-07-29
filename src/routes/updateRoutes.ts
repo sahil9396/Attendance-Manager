@@ -136,7 +136,7 @@ updateRoutes.put('/updateAttendance',CheckExpiryAndAuthorization, async (c) => {
 });
 
 // Update attendance based on action letter for a set of courses
-updateRoutes.put('/updateSetOfCourses', async (c) => {
+updateRoutes.put('/updateSetOfCourses',CheckExpiryAndAuthorization, async (c) => {
     const { assignedBy, actionletter, courses } = await c.req.json();
 
     try {
@@ -180,7 +180,7 @@ updateRoutes.put('/updateSetOfCourses', async (c) => {
 });
 
 // Reset individual course for that user
-updateRoutes.put('/resetIndividualCourse', async (c) => {
+updateRoutes.put('/resetIndividualCourse',CheckExpiryAndAuthorization, async (c) => {
     const { assignedBy, IndivCourse } = await c.req.json();
 
     try {
@@ -210,7 +210,7 @@ updateRoutes.put('/resetIndividualCourse', async (c) => {
 });
 
 // Reset the present, absent, and cancelled classes for every course for that user
-updateRoutes.put('/resetAttendance', async (c) => {
+updateRoutes.put('/resetAttendance',CheckExpiryAndAuthorization, async (c) => {
     const { assignedBy } = await c.req.json();
 
     try {

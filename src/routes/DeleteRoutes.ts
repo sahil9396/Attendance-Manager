@@ -97,7 +97,7 @@ deleteRoutes.get('/deleteDay', async (c) => {
 
 // Delete all courses
 deleteRoutes.get('/deleteallCourse', async (c) => {
-  const assignedBy = c.req.header().assignedBy;
+  const assignedBy = c.req.header('assignedBy');
 
   try {
     const prisma = new PrismaClient({ datasourceUrl: c.env.DATABASE_URL }).$extends(withAccelerate());

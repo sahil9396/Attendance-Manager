@@ -6,7 +6,7 @@ DATABASE_URL="prisma://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsI
 
 CLIENT_ID = '1093839051041-87aul8h96j6d533a6v6mp092q04ajap6.apps.googleusercontent.com'
 CLIENT_SECRET = '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'
-REDIRECT_URL = 'http://localhost:5173'
+REDIRECT_URL = 'https://attendance-frontend-7rm1swz4c-sahil9396s-projects.vercel.app'
 JWT_KEY = 'h0w1ZGNeKK3j9a1j60AfPY7lyCPl'
 
 # [[kv_namespaces]]
